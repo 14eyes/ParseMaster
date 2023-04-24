@@ -118,6 +118,7 @@ public class Parser
             FileType.DictionaryVuit => new() { ParseDictionary(reader, "vuint", classname) },
             FileType.DictionaryVuitVuit => new() { ParseDictionary(reader, "vuint", "vuint") },
             FileType.Packed => Enumerable.Range(0, (int)length).Select(_ => $"{{{string.Join(",", ParseClassInt(classname, reader, _baseMap.GetValueOrDefault(classname)))}}}").ToList(),
+            FileType.TextMap => new() { ParseTextMap(reader) },
             _ => throw new InvalidDataException($"Invalid mode {mode}")
         };
         var len = reader.LenToEof();
@@ -128,6 +129,27 @@ public class Parser
         }
 
         return $"[{string.Join(",", items)}]";
+    }
+
+    private string ParseTextMap(DeReader reader)
+    {
+        var items = new List<string>();
+        while (reader.LenToEof() > 0)
+        {
+            //idk what is this do not ask me
+            var one = reader.ReadVarUInt();
+            var three = reader.ReadVarUInt();
+            if (one != 1 || three != 3)
+            {
+                throw new InvalidDataException("wtf");
+            }
+
+            var key = ParseFieldType("vuint", reader);
+
+            items.Add($"{key}: {ParseFieldType("string", reader)}");
+        }
+
+        return $"{{{string.Join(",", items)}}}";
     }
 
     private string ParseDictionary(DeReader reader, string keyType, string valueType)
@@ -255,7 +277,7 @@ public class Parser
 
         if (hasBase && isExcel)
         {
-            fields = MergeFields(fields, classname!);
+            fields = MergeFields(fields, classname);
         }
 
         Logger.WriteLine($"Parsing Class {classname} ({fields.Count} fields)");

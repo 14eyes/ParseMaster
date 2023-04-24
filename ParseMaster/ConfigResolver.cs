@@ -164,6 +164,8 @@ internal class ConfigResolver
             var fileName = Path.GetFileNameWithoutExtension(path);
             if (fileName.EndsWith("Data"))
                 return (fileName[..^4], FileType.Packed, false);
+            if (path.Contains(@"\TextMap\"))
+                return ("", FileType.TextMap, false);
         }
         //if (config is null)
         //throw new NotImplementedException(path);
@@ -182,5 +184,6 @@ public enum FileType
 
     DictionaryVuit = 5,
     DictionaryVuitVuit = 6,
-    Packed = 7
+    Packed = 7,
+    TextMap = 8,
 }
