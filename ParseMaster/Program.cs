@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
+using CommandLine;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace ParseMaster;
 
@@ -8,18 +8,18 @@ internal class Program
 {
     private static void Main(string[] args)
     {
-        if (args.Length != 2)
-        {
-            Console.WriteLine("TODO: usage");
-            return;
-        }
+        CommandLine.Parser.Default.ParseArguments<Options>(args).WithParsed(RunWithOptions);
+    }
 
+    private static void RunWithOptions(Options o)
+    {
         var start = Stopwatch.GetTimestamp();
-        var parser = new Parser(@$"{args[0]}\configs.txt", @$"{args[0]}\enums.txt", @$"{args[0]}\type-index.json");
+        var parser = new Parser(o.ConfigFolder, !o.DisableDynamicFloatParsing);
         int suc = 0, fail = 0, skip = 0;
-        var di = new DirectoryInfo(args[1]);
-        //foreach (var file in di.GetFiles("*", SearchOption.AllDirectories))
-        Parallel.ForEach(di.GetFiles("*", SearchOption.AllDirectories), file =>
+        var dirI = new DirectoryInfo(o.InputFolder);
+        var dirO = new DirectoryInfo(o.OutputFolder);
+        //foreach (var file in dirI.GetFiles("*", SearchOption.AllDirectories))
+        Parallel.ForEach(dirI.GetFiles("*", SearchOption.AllDirectories), file =>
         {
             try
             {
@@ -29,11 +29,12 @@ internal class Program
                     Console.ForegroundColor = ConsoleColor.Yellow;
                     Console.WriteLine($"Failed to find config for {file}");
                     skip++;
+                    //continue;
                     return;
                 }
 
                 var output = parser.ParseFile(file.FullName, className, mode, derivation);
-                var fileName = file.FullName.Replace(@"\Data\", @"\json\") + ".json";
+                var fileName = file.FullName.Replace(dirI.FullName, dirO.FullName) + ".json";
                 Directory.CreateDirectory(Path.GetDirectoryName(fileName)!);
                 File.WriteAllText(fileName,
                     JsonConvert.SerializeObject(JsonConvert.DeserializeObject(output), Formatting.Indented));

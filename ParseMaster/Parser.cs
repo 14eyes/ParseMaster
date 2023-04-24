@@ -12,9 +12,14 @@ public class Parser
     private readonly List<string> _excelNames = new();
     private readonly List<string> _noZig = new();
     public const string ConfigNamespace = "MoleMole.Config";
+    private readonly bool _parseRpn;
 
-    public Parser(string configFile, string enumFile, string typeIndexFile)
+    public Parser(string configFolder, bool parseRpn)
     {
+        var configFile = Path.Combine(configFolder, "configs.txt");
+        var enumFile = Path.Combine(configFolder, "enums.txt");
+        var typeIndexFile = Path.Combine(configFolder, "type-index.json");
+        _parseRpn = parseRpn;
         _typeIndex =
             JsonConvert.DeserializeObject<Dictionary<string, Dictionary<uint, string>>>(File.ReadAllText(typeIndexFile))
             !;
@@ -436,7 +441,7 @@ public class Parser
         return isString ? $"\"{reader.ReadString()}\"" : reader.ReadVarInt().ToString();
     }
 
-    private static string ReadDynamicFloat(DeReader reader)
+    private string ReadDynamicFloat(DeReader reader)
     {
         // Credit goes to Raz
         var isFormula = reader.ReadBool();
@@ -452,32 +457,69 @@ public class Parser
                 if (isOperator)
                 {
                     var op = reader.ReadVarInt();
-                    var sOp = op switch
+                    if (_parseRpn)
                     {
-                        0 => "Add",
-                        1 => "Sub",
-                        11 => "Mul",
-                        12 => "Div",
-                        _ => op.ToString()
-                    };
-                    components.Add($"\" {sOp} \"");
+
+                        var sOp = op switch
+                        {
+                            0 => "+",
+                            1 => "-",
+                            11 => "*",
+                            12 => "/",
+                            _ => op.ToString()
+                        };
+                        components.Add($"{sOp}");
+                    }
+                    else
+                    {
+                        var sOp = op switch
+                        {
+                            0 => "ADD",
+                            1 => "SUB",
+                            11 => "MUL",
+                            12 => "DIV",
+                            _ => op.ToString()
+                        };
+                        components.Add($"\"{sOp}\"");
+                    }
                 }
                 else
                 {
                     var isString = reader.ReadBool();
                     components.Add(isString
-                        ? $"\"{reader.ReadString()}\""
-                        : reader.ReadF32().ToString(CultureInfo.InvariantCulture));
+                            ? _parseRpn ? $"%{reader.ReadString()}" : $"\"{reader.ReadString()}\""
+                            : reader.ReadF32().ToString(CultureInfo.InvariantCulture));
+
                 }
             }
 
-            return $"[{string.Join(",", components)}]";
+            return _parseRpn ? $"\"{RpnToString(components)}\"" : $"[{string.Join(",", components)}]";
         }
 
         {
             var isString = reader.ReadBool();
             return isString ? $"\"{reader.ReadString()}\"" : reader.ReadF32().ToString(CultureInfo.InvariantCulture);
         }
+    }
+
+    public static string RpnToString(List<string> tokens)
+    {
+        var stack = new Stack<string>();
+        foreach (var token in tokens)
+        {
+            if (token is "+" or "-" or "*" or "/")
+            {
+                var operand2 = stack.Pop();
+                var operand1 = stack.Pop();
+                var expression = operand1 + token + operand2;
+                stack.Push(expression);
+            }
+            else
+            {
+                stack.Push(token);
+            }
+        }
+        return stack.Pop();
     }
 
     private static string FormatFloat(object value) => $"{value:0.0############}";
